@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <LangVersion>default</LangVersion>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="8.1.1"/>
+        <PackageReference Include="FluentValidation.AspNetCore" Version="10.3.3"/>
+        <PackageReference Include="Hellang.Middleware.SpaFallback" Version="2.0.0"/>
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.2.1"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Application\Application.csproj"/>
+        <ProjectReference Include="..\Infrastructure\Infrastructure.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <_ContentIncludedByDefault Remove="wwwroot\.last_build_id"/>
+        <_ContentIncludedByDefault Remove="wwwroot\assets\AssetManifest.json"/>
+        <_ContentIncludedByDefault Remove="wwwroot\assets\FontManifest.json"/>
+        <_ContentIncludedByDefault Remove="wwwroot\assets\fonts\MaterialIcons-Regular.otf"/>
+        <_ContentIncludedByDefault Remove="wwwroot\assets\NOTICES"/>
+        <_ContentIncludedByDefault Remove="wwwroot\assets\packages\cupertino_icons\assets\CupertinoIcons.ttf"/>
+        <_ContentIncludedByDefault Remove="wwwroot\favicon.png"/>
+        <_ContentIncludedByDefault Remove="wwwroot\flutter_service_worker.js"/>
+        <_ContentIncludedByDefault Remove="wwwroot\icons\Icon-192.png"/>
+        <_ContentIncludedByDefault Remove="wwwroot\icons\Icon-512.png"/>
+        <_ContentIncludedByDefault Remove="wwwroot\icons\Icon-maskable-192.png"/>
+        <_ContentIncludedByDefault Remove="wwwroot\icons\Icon-maskable-512.png"/>
+        <_ContentIncludedByDefault Remove="wwwroot\index.html"/>
+        <_ContentIncludedByDefault Remove="wwwroot\main.dart.js"/>
+        <_ContentIncludedByDefault Remove="wwwroot\manifest.json"/>
+        <_ContentIncludedByDefault Remove="wwwroot\version.json"/>
+    </ItemGroup>
+
+</Project>
