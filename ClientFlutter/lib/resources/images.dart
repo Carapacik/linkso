@@ -1,3 +1,0 @@
-class AppImages {
-  AppImages._();
-}

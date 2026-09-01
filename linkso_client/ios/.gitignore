@@ -1,0 +1,16 @@
+# Xcode and CocoaPods generated output
+**/xcuserdata/
+**/DerivedData/
+**/.swiftpm/
+/Pods/
+/.symlinks/
+
+# Flutter-generated iOS integration
+/Flutter/App.framework/
+/Flutter/Flutter.framework/
+/Flutter/Flutter.podspec
+/Flutter/Generated.xcconfig
+/Flutter/ephemeral/
+/Flutter/.last_build_id
+/Flutter/flutter_export_environment.sh
+/Runner/GeneratedPluginRegistrant.*

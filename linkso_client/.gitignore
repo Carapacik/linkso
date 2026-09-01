@@ -1,0 +1,19 @@
+# Flutter and Dart generated output
+.dart_tool/
+.flutter-plugins-dependencies
+/build/
+/coverage/
+.widget_preview/
+app.*.symbols
+app.*.map.json
+
+# Local editor state and logs
+.idea/
+*.iml
+*.log
+.DS_Store
+
+# Public compile-time configuration; only the template is committed
+.env
+.env.*
+!.env.example

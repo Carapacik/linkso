@@ -1,0 +1,111 @@
+# Public HTTP trial with local-only email capture, not production email delivery.
+name: linkso-trial
+
+services:
+  postgres:
+    image: postgres:18.6-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${LINKSO_POSTGRES_DB:?Set the trial database name}
+      POSTGRES_USER: ${LINKSO_POSTGRES_USER:?Set the trial database user}
+      POSTGRES_PASSWORD: ${LINKSO_POSTGRES_PASSWORD:?Set a random trial database password}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    networks: [backend]
+
+  mailpit:
+    image: axllent/mailpit:v1.31.0@sha256:c96991d9bef73594c246d89ca81411d4e916f03e76a7d2d72fa2ab5dd3c9ce24
+    restart: unless-stopped
+    environment:
+      MP_DISABLE_VERSION_CHECK: "true"
+      MP_SMTP_DISABLE_RDNS: "true"
+      MP_BLOCK_REMOTE_CSS_AND_FONTS: "true"
+      MP_MAX_MESSAGES: 500
+    ports:
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      backend: {}
+      management:
+        gw_priority: 1
+
+  migrate:
+    image: linkso-server:${LINKSO_IMAGE_TAG:?Set a versioned image tag}
+    build:
+      context: .
+      dockerfile: linkso_server/Dockerfile
+      args:
+        CARGO_BUILD_JOBS: "1"
+    command: ["migrate"]
+    env_file: ${LINKSO_ENV_FILE:-.env.trial}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+
+  server:
+    image: linkso-server:${LINKSO_IMAGE_TAG:?Set a versioned image tag}
+    command: ["serve"]
+    env_file: ${LINKSO_ENV_FILE:-.env.trial}
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1:8080/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    networks: [backend]
+
+  web:
+    image: linkso-web:${LINKSO_IMAGE_TAG:?Set a versioned image tag}
+    build:
+      context: .
+      dockerfile: linkso_client/Dockerfile
+      args:
+        API_BASE_URL: ${LINKSO_PUBLIC_BASE_URL:?Set the public HTTP origin}
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      backend: {}
+      frontend:
+        gw_priority: 1
+
+volumes:
+  postgres_data:
+    name: linkso_trial_postgres_data
+
+networks:
+  backend:
+    internal: true
+  frontend:
+    driver: bridge
+  management:
+    driver: bridge

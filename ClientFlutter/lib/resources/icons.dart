@@ -1,3 +1,0 @@
-class AppIcons {
-  AppIcons._();
-}

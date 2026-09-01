@@ -1,0 +1,90 @@
+name: linkso-production
+
+services:
+  postgres:
+    image: postgres:18.6-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+    restart: unless-stopped
+    env_file: ${LINKSO_ENV_FILE:-.env.production}
+    environment:
+      POSTGRES_DB: ${LINKSO_POSTGRES_DB}
+      POSTGRES_USER: ${LINKSO_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${LINKSO_POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+    networks: [backend]
+
+  migrate:
+    image: linkso-server:${LINKSO_IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: linkso_server/Dockerfile
+    command: ["migrate"]
+    env_file: ${LINKSO_ENV_FILE:-.env.production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+
+  server:
+    image: linkso-server:${LINKSO_IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: linkso_server/Dockerfile
+    command: ["serve"]
+    env_file: ${LINKSO_ENV_FILE:-.env.production}
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1:8080/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    networks:
+      backend: {}
+      mail_egress:
+        gw_priority: 1
+
+  web:
+    image: linkso-web:${LINKSO_IMAGE_TAG}
+    build:
+      context: .
+      dockerfile: linkso_client/Dockerfile
+      args:
+        API_BASE_URL: ${LINKSO_PUBLIC_BASE_URL}
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [backend]
+
+volumes:
+  postgres_data:
+    name: linkso_production_postgres_data
+
+networks:
+  backend:
+    internal: true
+  # Only Rust joins this outbound bridge. PostgreSQL remains isolated.
+  # Host egress policy should allow DNS and the selected provider's SMTP endpoint only.
+  mail_egress:
+    driver: bridge

@@ -1,0 +1,12 @@
+{
+  "name": "linkso-brand-assets",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "generate": "node generate.cjs",
+    "check": "node generate.cjs --check"
+  },
+  "dependencies": {
+    "sharp": "0.35.4"
+  }
+}
