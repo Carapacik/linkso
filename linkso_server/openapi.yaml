@@ -1,0 +1,780 @@
+openapi: 3.1.0
+info:
+  title: LinkSo API
+  version: 1.0.0
+  description: HTTP contract implemented by the LinkSo Rust server and consumed by the Flutter client.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: operations
+  - name: links
+  - name: public-flow
+  - name: auth
+  - name: account
+  - name: analytics
+  - name: admin
+paths:
+  /health/live:
+    get:
+      tags: [operations]
+      summary: Process liveness
+      responses:
+        '200': {description: Process is running}
+  /health/ready:
+    get:
+      tags: [operations]
+      summary: Database readiness
+      responses:
+        '200': {description: Service is ready}
+        '503': {$ref: '#/components/responses/ApiError'}
+  /internal/metrics:
+    get:
+      tags: [operations]
+      summary: Prometheus metrics with bounded labels
+      security: [{adminToken: []}]
+      responses:
+        '200': {description: Prometheus text exposition}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/links:
+    post:
+      tags: [links]
+      summary: Create a direct, password, or advertising link
+      description: Authentication is optional; tags require an authenticated owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LinkWrite'}
+      responses:
+        '201':
+          description: Link created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Link'}
+        '400': {$ref: '#/components/responses/ApiError'}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '409': {$ref: '#/components/responses/ApiError'}
+        '429': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/links:
+    get:
+      tags: [links]
+      summary: List links owned by the current user
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1, default: 1}}
+        - {name: page_size, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+        - {name: query, in: query, schema: {type: string}}
+        - {name: kind, in: query, schema: {$ref: '#/components/schemas/LinkKind'}}
+        - {name: status, in: query, schema: {type: string}}
+        - {name: expiration, in: query, schema: {type: string}}
+        - {name: sort, in: query, schema: {type: string}}
+        - {name: direction, in: query, schema: {type: string, enum: [asc, desc]}}
+        - {name: tag, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Paginated owned links
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LinkPage'}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/tags:
+    get:
+      tags: [links]
+      summary: List normalized tags used by the current owner
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Tag summaries}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/links/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [links]
+      summary: Get an owned link
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Owned link}
+        '404': {$ref: '#/components/responses/ApiError'}
+    put:
+      tags: [links]
+      summary: Update an owned link, including its mode
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/LinkUpdate'}
+      responses:
+        '200': {description: Updated link}
+        '400': {$ref: '#/components/responses/ApiError'}
+    delete:
+      tags: [links]
+      summary: Soft-delete an owned link
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '204': {description: Link deleted}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/links/{id}/enable:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [links]
+      summary: Enable an owned link
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Enabled link}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/links/{id}/disable:
+    parameters: [{$ref: '#/components/parameters/Id'}]
+    post:
+      tags: [links]
+      summary: Disable an owned link
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Disabled link}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/links/{slug}/reports:
+    parameters: [{$ref: '#/components/parameters/Slug'}]
+    post:
+      tags: [public-flow]
+      summary: Submit an abuse report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ReportLink'}
+      responses:
+        '202': {description: Report accepted}
+        '400': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+        '429': {$ref: '#/components/responses/ApiError'}
+  /api/v1/password-links/{slug}/sessions:
+    post:
+      tags: [public-flow]
+      summary: Start a password-link session
+      parameters: [{$ref: '#/components/parameters/Slug'}]
+      responses:
+        '200': {description: Password session started}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/password-links/{slug}/verify:
+    post:
+      tags: [public-flow]
+      summary: Verify a password and issue a redirect ticket
+      parameters: [{$ref: '#/components/parameters/Slug'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PasswordVerify'}
+      responses:
+        '200': {description: One-time redirect ticket issued}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '409': {$ref: '#/components/responses/ApiError'}
+        '429': {$ref: '#/components/responses/ApiError'}
+  /api/v1/password-links/tickets/{ticket}:
+    get:
+      tags: [public-flow]
+      summary: Consume a one-time password redirect ticket
+      parameters: [{$ref: '#/components/parameters/Ticket'}]
+      responses:
+        '307': {description: Redirect to the protected target}
+        '404': {$ref: '#/components/responses/ApiError'}
+        '410': {$ref: '#/components/responses/ApiError'}
+  /api/v1/advertising-links/{slug}/sessions:
+    post:
+      tags: [public-flow]
+      summary: Start a five-second advertising or placeholder session
+      parameters: [{$ref: '#/components/parameters/Slug'}]
+      responses:
+        '200': {description: Advertising session with a campaign or null placeholder}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/advertising-links/{slug}/sessions/{session_id}/continue:
+    post:
+      tags: [public-flow]
+      summary: Issue a redirect ticket after the server timer completes
+      parameters:
+        - $ref: '#/components/parameters/Slug'
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200': {description: One-time redirect ticket issued}
+        '404': {$ref: '#/components/responses/ApiError'}
+        '410': {$ref: '#/components/responses/ApiError'}
+        '425': {$ref: '#/components/responses/ApiError'}
+        '429': {$ref: '#/components/responses/ApiError'}
+  /api/v1/advertising-links/tickets/{ticket}:
+    get:
+      tags: [public-flow]
+      summary: Consume a one-time advertising redirect ticket
+      parameters: [{$ref: '#/components/parameters/Ticket'}]
+      responses:
+        '307': {description: Redirect to the target}
+        '404': {$ref: '#/components/responses/ApiError'}
+        '410': {$ref: '#/components/responses/ApiError'}
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      summary: Register an account
+      description: Creates a pending account and queues its verification email. No development token is returned by the running server. A queue failure leaves the pending account recoverable through verification resend.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Credentials'}
+      responses:
+        '201': {description: Account registered}
+        '422': {$ref: '#/components/responses/ApiError'}
+        '429': {$ref: '#/components/responses/ApiError'}
+        '503': {$ref: '#/components/responses/ApiError'}
+  /api/v1/auth/verification-resend:
+    post:
+      tags: [auth]
+      summary: Request another verification email
+      description: Registration and resend share three requests per normalized address per hour. The response does not reveal whether an unverified account exists, including when SMTP is unavailable. A new token invalidates the previous one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EmailRequest'}
+      responses:
+        '202': {$ref: '#/components/responses/EmailAccepted'}
+        '422': {$ref: '#/components/responses/ApiError'}
+        '429': {$ref: '#/components/responses/EmailRateLimited'}
+  /api/v1/auth/verify-email:
+    post:
+      tags: [auth]
+      summary: Consume a single-use verification token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EmailTokenRequest'}
+      responses:
+        '200': {description: Email verified}
+        '422': {$ref: '#/components/responses/ApiError'}
+  /api/v1/auth/password-reset:
+    post:
+      tags: [auth]
+      summary: Request a password-reset email
+      description: Returns the same accepted response for active and unknown accounts regardless of SMTP outcome. Two requests per normalized address per hour; tokens expire after 30 minutes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EmailRequest'}
+      responses:
+        '202': {$ref: '#/components/responses/EmailAccepted'}
+        '422': {$ref: '#/components/responses/ApiError'}
+        '429': {$ref: '#/components/responses/EmailRateLimited'}
+  /api/v1/auth/password-reset/confirm:
+    post:
+      tags: [auth]
+      summary: Consume a reset token, change password and revoke sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [token, password]
+              properties:
+                token: {type: string, writeOnly: true}
+                password: {type: string, minLength: 12, writeOnly: true}
+      responses:
+        '204': {description: Password changed and sessions revoked}
+        '422': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/email-change:
+    post:
+      tags: [account]
+      summary: Queue a confirmation email to a new address
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [email, current_password]
+              properties:
+                email: {type: string, format: email}
+                current_password: {type: string, writeOnly: true}
+      responses:
+        '202': {$ref: '#/components/responses/EmailAccepted'}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '409': {$ref: '#/components/responses/ApiError'}
+        '422': {$ref: '#/components/responses/ApiError'}
+        '429': {$ref: '#/components/responses/EmailRateLimited'}
+        '503': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/email-change/confirm:
+    post:
+      tags: [account]
+      summary: Confirm email change for the authenticated requesting account
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EmailTokenRequest'}
+      responses:
+        '200': {description: Updated profile; other sessions revoked}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '409': {$ref: '#/components/responses/ApiError'}
+        '422': {$ref: '#/components/responses/ApiError'}
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Start a Web cookie session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Credentials'}
+      responses:
+        '200': {description: Authenticated session}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/mobile/auth/login:
+    post:
+      tags: [auth]
+      summary: Start a mobile Bearer session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Credentials'}
+      responses:
+        '200': {description: Authenticated session and Bearer token}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/auth/session:
+    get:
+      tags: [auth]
+      summary: Get the current cookie or Bearer session user
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Current user}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke the current session
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '204': {description: Session revoked}
+  /api/v1/auth/logout-all:
+    post:
+      tags: [auth]
+      summary: Revoke all sessions for the current account
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '204': {description: Sessions revoked}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/profile:
+    get:
+      tags: [account]
+      summary: Get the current profile
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: User profile}
+        '401': {$ref: '#/components/responses/ApiError'}
+    put:
+      tags: [account]
+      summary: Update display name
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProfileUpdate'}
+      responses:
+        '200': {description: Updated profile}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '422': {$ref: '#/components/responses/ApiError'}
+    delete:
+      tags: [account]
+      summary: Permanently delete the current account and its data
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AccountDelete'}
+      responses:
+        '204': {description: Account deleted}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '422': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/preferences:
+    put:
+      tags: [account]
+      summary: Update the server-side timezone preference
+      description: Language and theme are device-local settings and are never sent to the server.
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [timezone]
+              properties:
+                timezone: {type: string, example: Europe/Moscow}
+      responses:
+        '200': {description: Updated user profile}
+        '400': {$ref: '#/components/responses/ApiError'}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/password:
+    put:
+      tags: [account]
+      summary: Change password and revoke other sessions
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PasswordChange'}
+      responses:
+        '204': {description: Password changed}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '422': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/sessions:
+    get:
+      tags: [account]
+      summary: List active account sessions
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Active sessions}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/sessions/{id}:
+    delete:
+      tags: [account]
+      summary: Revoke an active session
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '204': {description: Session revoked}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/analytics:
+    get:
+      tags: [analytics]
+      summary: Get owner-scoped analytics for 7, 30, or 90 days
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/Days'}]
+      responses:
+        '200': {description: Analytics dashboard}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/me/links/{id}/analytics:
+    get:
+      tags: [analytics]
+      summary: Get analytics for one owned link
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Days'
+      security: [{sessionCookie: []}, {bearerAuth: []}]
+      responses:
+        '200': {description: Per-link analytics}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/admin/ad-campaigns:
+    post:
+      tags: [admin]
+      summary: Create an advertising campaign
+      security: [{adminToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CampaignWrite'}
+      responses:
+        '201': {description: Campaign created}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/admin/ad-campaigns/{id}:
+    put:
+      tags: [admin]
+      summary: Update an advertising campaign
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      security: [{adminToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CampaignWrite'}
+      responses:
+        '200': {description: Updated campaign}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/admin/ad-campaigns/{id}/enable:
+    post:
+      tags: [admin]
+      summary: Enable a campaign
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      security: [{adminToken: []}]
+      responses:
+        '200': {description: Enabled campaign}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/admin/ad-campaigns/{id}/disable:
+    post:
+      tags: [admin]
+      summary: Disable a campaign
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      security: [{adminToken: []}]
+      responses:
+        '200': {description: Disabled campaign}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/ad-campaigns/active:
+    get:
+      tags: [public-flow]
+      summary: Get the currently active public campaign
+      responses:
+        '200': {description: Active campaign}
+        '204': {description: No active campaign}
+  /api/v1/admin/link-reports:
+    get:
+      tags: [admin]
+      summary: List pending abuse reports
+      security: [{adminToken: []}]
+      responses:
+        '200': {description: Pending reports}
+        '401': {$ref: '#/components/responses/ApiError'}
+  /api/v1/admin/link-reports/{id}/dismiss:
+    post:
+      tags: [admin]
+      summary: Dismiss an abuse report
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      security: [{adminToken: []}]
+      responses:
+        '200': {description: Dismissed report}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/admin/links/{id}/block:
+    post:
+      tags: [admin]
+      summary: Block a link and record the moderation reason
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      security: [{adminToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BlockLink'}
+      responses:
+        '200': {description: Blocked link}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /api/v1/admin/links/{id}/unblock:
+    post:
+      tags: [admin]
+      summary: Remove an administrative link block
+      parameters: [{$ref: '#/components/parameters/Id'}]
+      security: [{adminToken: []}]
+      responses:
+        '200': {description: Unblocked link}
+        '401': {$ref: '#/components/responses/ApiError'}
+        '404': {$ref: '#/components/responses/ApiError'}
+  /{slug}:
+    get:
+      tags: [public-flow]
+      summary: Resolve a direct short link or route an interactive flow
+      parameters: [{$ref: '#/components/parameters/Slug'}]
+      responses:
+        '307': {description: Direct redirect}
+        '404': {$ref: '#/components/responses/ApiError'}
+        '410': {$ref: '#/components/responses/ApiError'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: linkso_session
+    bearerAuth:
+      type: http
+      scheme: bearer
+    adminToken:
+      type: apiKey
+      in: header
+      name: Authorization
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Slug:
+      name: slug
+      in: path
+      required: true
+      schema: {type: string, minLength: 3, maxLength: 64}
+    Ticket:
+      name: ticket
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    SessionId:
+      name: session_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Days:
+      name: days
+      in: query
+      schema: {type: integer, enum: [7, 30, 90], default: 30}
+  responses:
+    EmailAccepted:
+      description: Request accepted without account-existence or delivery-status disclosure
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [accepted]
+            properties:
+              accepted: {type: boolean, const: true}
+    EmailRateLimited:
+      description: Too many email requests
+      headers:
+        Retry-After:
+          schema: {type: integer, minimum: 1}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ApiError'}
+    ApiError:
+      description: Structured API error with a request ID
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+  schemas:
+    LinkKind:
+      type: string
+      enum: [direct, password, advertising]
+    LinkWrite:
+      type: object
+      additionalProperties: false
+      required: [target_url]
+      properties:
+        target_url: {type: string, format: uri, maxLength: 2048}
+        kind: {$ref: '#/components/schemas/LinkKind'}
+        slug: {type: string, minLength: 3, maxLength: 64}
+        title: {type: [string, 'null']}
+        expires_at: {type: [string, 'null'], format: date-time}
+        password: {type: [string, 'null'], writeOnly: true}
+        tags: {type: array, maxItems: 10, items: {type: string}}
+    LinkUpdate:
+      allOf:
+        - $ref: '#/components/schemas/LinkWrite'
+        - type: object
+          required: [slug, kind]
+    Link:
+      type: object
+      required: [id, slug, short_url, target_url, kind, status, created_at, tags]
+      properties:
+        id: {type: string, format: uuid}
+        owner_id: {type: [string, 'null'], format: uuid}
+        slug: {type: string}
+        short_url: {type: string, format: uri}
+        target_url: {type: string, format: uri}
+        title: {type: [string, 'null']}
+        kind: {$ref: '#/components/schemas/LinkKind'}
+        status: {type: string}
+        expires_at: {type: [string, 'null'], format: date-time}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        redirect_count: {type: integer, format: int64}
+        tags: {type: array, items: {type: string}}
+    LinkPage:
+      type: object
+      required: [items, pagination]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Link'}}
+        pagination:
+          type: object
+          required: [page, page_size, total_items, total_pages]
+          properties:
+            page: {type: integer}
+            page_size: {type: integer}
+            total_items: {type: integer, format: int64}
+            total_pages: {type: integer}
+    PasswordVerify:
+      type: object
+      additionalProperties: false
+      required: [session_id, password]
+      properties:
+        session_id: {type: string, format: uuid}
+        password: {type: string, writeOnly: true}
+    ReportLink:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: {type: string}
+        details: {type: [string, 'null']}
+    BlockLink:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: {type: string}
+    Credentials:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: {type: string, format: email}
+        password: {type: string, minLength: 12, writeOnly: true}
+    ProfileUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        display_name: {type: [string, 'null']}
+    PasswordChange:
+      type: object
+      additionalProperties: false
+      required: [current_password, new_password]
+      properties:
+        current_password: {type: string, writeOnly: true}
+        new_password: {type: string, minLength: 12, writeOnly: true}
+    AccountDelete:
+      type: object
+      additionalProperties: false
+      required: [current_password, confirmation]
+      properties:
+        current_password: {type: string, writeOnly: true}
+        confirmation: {type: string, const: DELETE}
+    CampaignWrite:
+      type: object
+      additionalProperties: false
+      required: [title, body, advertiser_url, starts_at, ends_at]
+      properties:
+        title: {type: string}
+        body: {type: string}
+        image_url: {type: [string, 'null'], format: uri}
+        advertiser_url: {type: string, format: uri}
+        starts_at: {type: string, format: date-time}
+        ends_at: {type: string, format: date-time}
+    EmailRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email: {type: string, format: email}
+    EmailTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token: {type: string, writeOnly: true}
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            request_id: {type: string}

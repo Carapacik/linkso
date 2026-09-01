@@ -1,0 +1,14 @@
+.git
+.gitignore
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.test.example
+**/target
+**/build
+**/.dart_tool
+**/.flutter-plugins*
+docs
+media
+**/node_modules
+*.dump

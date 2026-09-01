@@ -1,0 +1,43 @@
+name: linkso_client
+description: "LinkSo client for creating, managing and tracking direct, password-protected and advertising short links."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  cupertino_icons: ^1.0.9
+  fl_chart: ^1.2.0
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_secure_storage: ^11.0.0
+  flutter_web_plugins:
+    sdk: flutter
+  go_router: ^18.0.0
+  http: ^1.6.0
+  intl: ^0.20.3
+  material_ui: ^1.1.0
+  qr: ^4.0.0
+  share_plus: ^13.3.0
+  shared_preferences: ^2.5.5
+  url_launcher: ^6.3.2
+  web: ^1.1.1
+
+dev_dependencies:
+  carapacik_lints: ^3.13.1
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  shared_preferences_platform_interface: ^2.4.2
+
+flutter:
+  generate: true
+  uses-material-design: true
+  fonts:
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/Nunito-VariableFont_wght.ttf

@@ -1,0 +1,100 @@
+name: linkso
+
+services:
+  postgres:
+    image: postgres:18.6-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${LINKSO_POSTGRES_DB:-linkso}
+      POSTGRES_USER: ${LINKSO_POSTGRES_USER:-linkso}
+      POSTGRES_PASSWORD: ${LINKSO_POSTGRES_PASSWORD:-linkso_local_only}
+    ports:
+      - "127.0.0.1:${LINKSO_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  mailpit:
+    profiles: ["app", "mail"]
+    image: axllent/mailpit:v1.31.0@sha256:c96991d9bef73594c246d89ca81411d4e916f03e76a7d2d72fa2ab5dd3c9ce24
+    restart: unless-stopped
+    environment:
+      MP_DISABLE_VERSION_CHECK: "true"
+      MP_SMTP_DISABLE_RDNS: "true"
+      MP_BLOCK_REMOTE_CSS_AND_FONTS: "true"
+      MP_MAX_MESSAGES: 500
+    ports:
+      - "127.0.0.1:${LINKSO_MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${LINKSO_MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  server:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: linkso_server/Dockerfile
+    restart: unless-stopped
+    environment:
+      LINKSO_ENV: development
+      LINKSO_HTTP_HOST: 0.0.0.0
+      LINKSO_HTTP_PORT: 8080
+      LINKSO_PUBLIC_BASE_URL: ${LINKSO_PUBLIC_BASE_URL:-http://localhost:8088}
+      LINKSO_DATABASE_URL: postgres://${LINKSO_POSTGRES_USER:-linkso}:${LINKSO_POSTGRES_PASSWORD:-linkso_local_only}@postgres:5432/${LINKSO_POSTGRES_DB:-linkso}
+      LINKSO_DATABASE_MAX_CONNECTIONS: 10
+      LINKSO_DATABASE_ACQUIRE_TIMEOUT_SECONDS: 5
+      LINKSO_LOG: linkso_server=debug
+      LINKSO_COOKIE_SECURE: "false"
+      LINKSO_SESSION_SECRET: ${LINKSO_SESSION_SECRET:-linkso_local_session_secret_not_for_production_2026}
+      LINKSO_ADMIN_TOKEN: ${LINKSO_ADMIN_TOKEN:-linkso_local_admin_token_not_for_production_2026}
+      LINKSO_SMTP_HOST: mailpit
+      LINKSO_SMTP_PORT: 1025
+      LINKSO_SMTP_SECURITY: none
+      LINKSO_MAIL_FROM: "LinkSo <noreply@linkso.test>"
+      LINKSO_SMTP_TIMEOUT_SECONDS: 10
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1:8080/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  web:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: linkso_client/Dockerfile
+      args:
+        API_BASE_URL: ${LINKSO_PUBLIC_BASE_URL:-http://localhost:8088}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:8080"
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1:8080/health/live"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    name: linkso_postgres_data

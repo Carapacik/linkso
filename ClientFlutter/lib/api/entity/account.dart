@@ -1,3 +1,0 @@
-class UserAccount {
-  String? token;
-}

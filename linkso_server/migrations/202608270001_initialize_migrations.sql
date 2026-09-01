@@ -1,0 +1,1 @@
+-- Initialize SQLx migration tracking. Domain tables are introduced in later migrations.

@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+!.env.production.example
+# Database exports belong outside the repository.
+*.dump
+.DS_Store
+Thumbs.db
